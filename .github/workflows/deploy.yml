@@ -33,7 +33,6 @@ jobs:
       - name: Build static site
         env:
           NEXT_PUBLIC_BASE_PATH: "/${{ github.event.repository.name }}"
-          NODE_ENV: production
         run: bun run build
 
       - name: Upload artifact
