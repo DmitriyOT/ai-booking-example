@@ -152,3 +152,23 @@ Stage Summary:
 - All API calls go directly to api.moonshot.ai (no Next.js rewrite, no CORS proxy)
 - Settings dialog now has only: stub mode toggle + API key field
 - cloudflare-worker.js still exists in repo but is no longer referenced
+
+---
+Task ID: 9
+Agent: Main
+Task: Add clickable link support in AI chat responses
+
+Work Log:
+- Created `renderMessageContent()` function that parses two link formats:
+  - Markdown: `[text](url)` → renders as `<a>` with text label
+  - Plain URL: `https://...` → renders as `<a>` with URL as label (truncated if >50 chars)
+- Replaced `{msg.content}` with `renderMessageContent(msg.content)` for assistant messages
+- User messages remain plain text (no link parsing needed)
+- Removed `whitespace-pre-wrap` from message bubble (newlines handled via `<br>` tags)
+- Updated stub responses to include both link formats for testing
+- Browser verified: markdown link navigates to /passport, plain URL renders as clickable link, multiline text with numbers preserves line breaks
+
+Stage Summary:
+- Both `[text](url)` and `https://...` are clickable in AI responses
+- Internal links (e.g., /passport) work for same-origin navigation
+- External links open in new tab with rel=noopener noreferrer

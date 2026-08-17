@@ -81,12 +81,12 @@ function getStubResponse(passportReceived: boolean, userMessage: string): string
   if (msg.includes("паспорт") || msg.includes("загруз") || msg.includes("документ")) {
     return passportReceived
       ? "Ваш паспорт уже получен и проверен ✓. Можете переходить к следующему этапу — оплате залога."
-      : "Для начала процесса заселения необходимо загрузить копию паспорта. Это первый обязательный шаг. Пожалуйста, перейдите на страницу загрузки паспорта, чтобы предоставить документ.";
+      : "Для начала процесса заселения необходимо загрузить копию паспорта. Это первый обязательный шаг. Пожалуйста, перейдите на страницу загрузки паспорта: [загрузить паспорт](/passport).";
   }
   if (msg.includes("засел") || msg.includes("заселиться") || msg.includes("как") && msg.includes("мне")) {
     return passportReceived
       ? "Ваш паспорт уже на руках! Следующий шаг — оплата залога. После подтверждения оплаты мы подготовим ваш номер к заезду."
-      : "Процесс заселения состоит из нескольких этапов:\n\n1. **Загрузка паспорта** — сейчас этот шаг не завершён\n2. **Оплата залога** — после получения паспорта\n3. **Получение ключа** — после оплаты\n\nПожалуйста, начните с загрузки паспорта — это обязательный первый шаг.";
+      : "Процесс заселения состоит из нескольких этапов:\n\n1. **Загрузка паспорта** — сейчас этот шаг не завершён\n2. **Оплата залога** — после получения паспорта\n3. **Получение ключа** — после оплаты\n\nПожалуйста, начните с загрузки паспорта — это обязательный первый шаг: https://example.com/passport";
   }
   if (msg.includes("оплат") || msg.includes("залог") || msg.includes("деньг") || msg.includes("карт")) {
     return passportReceived
@@ -112,6 +112,60 @@ function getStubResponse(passportReceived: boolean, userMessage: string): string
     : "Спасибо за вопрос. Напоминаю, что первым шагом для заселения является загрузка паспорта. Если у вас есть вопросы по этому процессу — спрашивайте!";
 }
 
+function renderMessageContent(text: string) {
+  // 1) Markdown-style links: [text](url)
+  // 2) Plain URLs: https://...
+  // Everything else stays as plain text
+  const parts: (string | { type: "link"; href: string; label: string })[] = [];
+  // Match markdown links first, then plain URLs; everything else is text
+  const pattern = /\[([^\]]+)\]\(([^)]+)\)|(https?:\/\/[^\s)<>]+)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    if (match[1] !== undefined) {
+      // Markdown link [label](href)
+      parts.push({ type: "link", href: match[2], label: match[1] });
+    } else {
+      // Plain URL
+      const url = match[0];
+      // Use the URL as label but truncate if very long
+      const label = url.length > 50 ? url.slice(0, 47) + "..." : url;
+      parts.push({ type: "link", href: url, label });
+    }
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts.map((part, i) => {
+    if (typeof part === "string") {
+      // Preserve line breaks inside plain text segments
+      return part.split("\n").map((line, j, arr) => (
+        <span key={`${i}-${j}`}>
+          {line}
+          {j < arr.length - 1 && <br />}
+        </span>
+      ));
+    }
+    return (
+      <a
+        key={`l-${i}`}
+        href={part.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline underline-offset-2 text-primary hover:text-primary/80 transition-colors"
+      >
+        {part.label}
+      </a>
+    );
+  });
+}
+
 function buildSystemPrompt(passportReceived: boolean) {
   return `Ты — интеллектуальный консьерж отеля. Ты отвечаешь на вопросы гостя о процессе бронирования и заселения.
 
@@ -119,7 +173,7 @@ function buildSystemPrompt(passportReceived: boolean) {
 - Паспорт: ${passportReceived ? "получен ✓" : "не получен ✗"}
 
 Правила заселения:
-1. Сначала гость должен предоставить паспорт. Если паспорт ещё не получен — напомни гостю, что это первый необходимый шаг, и дай ссылку для загрузки: https://dmitriyot.github.io/ai-booking-example/passport
+1. Сначала гость должен предоставить паспорт. Если паспорт ещё не получен — напомни гостю, что это первый необходимый шаг, и дай ссылку для загрузки: https://example.com/passport
 2. После получения паспорта следующий этап — оплата залога.
 
 Отвечай вежливо, кратко и по делу. Отвечай только на русском языке. Не придумывай информацию, которой нет в контексте. Если гость спрашивает о чём-то несвязанном с бронированием — мягко скажи, что ты можешь помочь только по вопросам бронирования и заселения.`;
@@ -445,13 +499,15 @@ export default function HomePage() {
                     </div>
                   )}
                   <div
-                    className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${
+                    className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed break-words ${
                       msg.role === "user"
                         ? "bg-primary text-primary-foreground rounded-br-md"
                         : "bg-muted rounded-bl-md"
                     }`}
                   >
-                    {msg.content}
+                    {msg.role === "assistant"
+                      ? renderMessageContent(msg.content)
+                      : msg.content}
                   </div>
                   {msg.role === "user" && (
                     <div className="shrink-0 w-7 h-7 rounded-full bg-primary flex items-center justify-center mt-0.5">
