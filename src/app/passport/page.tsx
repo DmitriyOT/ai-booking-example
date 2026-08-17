@@ -40,6 +40,11 @@ export default function PassportPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!confirmed) return;
+    try {
+      localStorage.setItem("ai-concierge-passport", "true");
+    } catch {
+      /* ignore */
+    }
     setSubmitted(true);
   };
 

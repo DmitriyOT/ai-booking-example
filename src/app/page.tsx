@@ -39,10 +39,13 @@ import {
   EyeOff,
   AlertTriangle,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 
 const KIMI_MODEL = "moonshot-v1-8k";
 const LS_KEY = "ai-concierge-settings";
+const LS_MESSAGES_KEY = "ai-concierge-messages";
+const LS_PASSPORT_KEY = "ai-concierge-passport";
 
 interface Settings {
   apiKey: string;
@@ -71,6 +74,42 @@ function saveSettings(s: Settings) {
   }
 }
 
+function loadMessages(): ChatMessage[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(LS_MESSAGES_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    /* ignore */
+  }
+  return [];
+}
+
+function saveMessages(msgs: ChatMessage[]) {
+  try {
+    localStorage.setItem(LS_MESSAGES_KEY, JSON.stringify(msgs));
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadPassportReceived(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return localStorage.getItem(LS_PASSPORT_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function savePassportReceived(v: boolean) {
+  try {
+    localStorage.setItem(LS_PASSPORT_KEY, String(v));
+  } catch {
+    /* ignore */
+  }
+}
+
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
@@ -86,7 +125,7 @@ function getStubResponse(passportReceived: boolean, userMessage: string): string
   if (msg.includes("засел") || msg.includes("заселиться") || msg.includes("как") && msg.includes("мне")) {
     return passportReceived
       ? "Ваш паспорт уже на руках! Следующий шаг — оплата залога. После подтверждения оплаты мы подготовим ваш номер к заезду."
-      : "Процесс заселения состоит из нескольких этапов:\n\n1. **Загрузка паспорта** — сейчас этот шаг не завершён\n2. **Оплата залога** — после получения паспорта\n3. **Получение ключа** — после оплаты\n\nПожалуйста, начните с загрузки паспорта — это обязательный первый шаг: /passport";
+      : "Процесс заселения состоит из нескольких этапов:\n\n1. **Загрузка паспорта** — сейчас этот шаг не завершён\n2. **Оплата залога** — после получения паспорта\n3. **Получение ключа** — после оплаты\n\nПожалуйста, начните с загрузки паспорта — это обязательный первый шаг: [загрузить паспорт](/passport).";
   }
   if (msg.includes("оплат") || msg.includes("залог") || msg.includes("деньг") || msg.includes("карт")) {
     return passportReceived
@@ -252,6 +291,7 @@ export default function HomePage() {
   const [passportReceived, setPassportReceived] = useState(false);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const messagesLoadedRef = useRef(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -260,11 +300,38 @@ export default function HomePage() {
     const s = loadSettings();
     setSettings(s);
     if (!s.apiKey && !s.stubMode) setSettingsOpen(true);
+    if (!messagesLoadedRef.current) {
+      messagesLoadedRef.current = true;
+      setMessages(loadMessages());
+      setPassportReceived(loadPassportReceived());
+    }
   }, []);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
+
+  // Sync passport status when tab gains focus (e.g. user returns from /passport)
+  useEffect(() => {
+    const onStorage = () => {
+      setPassportReceived(loadPassportReceived());
+    };
+    const onFocus = () => {
+      setPassportReceived(loadPassportReceived());
+    };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, []);
+
+  const handleClearMessages = useCallback(() => {
+    setMessages([]);
+    setError(null);
+    try { localStorage.removeItem(LS_MESSAGES_KEY); } catch { /* ignore */ }
+  }, []);
 
   const handleSaveSettings = useCallback(() => {
     saveSettings(settings);
@@ -289,7 +356,9 @@ export default function HomePage() {
     }
 
     setError(null);
-    setMessages((prev) => [...prev, { role: "user", content: trimmed }]);
+    const updated = [...messages, { role: "user" as const, content: trimmed }];
+    setMessages(updated);
+    saveMessages(updated);
     setMessage("");
     setIsLoading(true);
 
@@ -307,16 +376,26 @@ export default function HomePage() {
           trimmed
         );
       }
-      setMessages((prev) => [...prev, { role: "assistant", content: response }]);
+      const withReply = [...updated, { role: "assistant" as const, content: response }];
+      setMessages(withReply);
+      saveMessages(withReply);
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "Произошла неизвестная ошибка";
       setError(msg);
-      setMessages((prev) => prev.slice(0, -1));
+      // Revert: remove the user message we just added
+      const reverted = updated.slice(0, -1);
+      setMessages(reverted);
+      saveMessages(reverted);
     } finally {
       setIsLoading(false);
     }
   }, [message, messages, passportReceived, isLoading, settings]);
+
+  const handlePassportToggle = useCallback((v: boolean) => {
+    setPassportReceived(v);
+    savePassportReceived(v);
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -427,7 +506,7 @@ export default function HomePage() {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <Label htmlFor="passport-toggle" className="text-sm text-muted-foreground cursor-pointer">Получен</Label>
-                <Switch id="passport-toggle" checked={passportReceived} onCheckedChange={setPassportReceived} />
+                <Switch id="passport-toggle" checked={passportReceived} onCheckedChange={handlePassportToggle} />
               </div>
             </div>
             {!passportReceived && (
@@ -477,12 +556,26 @@ export default function HomePage() {
             <CardTitle className="flex items-center gap-2 text-base">
               <MessageSquare className="w-4 h-4" /> Чат с ИИ
             </CardTitle>
-            <CardDescription className="flex items-center gap-2">
-              Задайте вопрос об этапах заселения
-              {settings.stubMode && (
-                <Badge variant="outline" className="text-blue-600 border-blue-300 bg-blue-50 text-[10px] px-1.5 py-0">
-                  STUB
-                </Badge>
+            <CardDescription className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                Задайте вопрос об этапах заселения
+                {settings.stubMode && (
+                  <Badge variant="outline" className="text-blue-600 border-blue-300 bg-blue-50 text-[10px] px-1.5 py-0">
+                    STUB
+                  </Badge>
+                )}
+              </span>
+              {messages.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                  onClick={handleClearMessages}
+                  aria-label="Очистить историю"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1" />
+                  Очистить
+                </Button>
               )}
             </CardDescription>
           </CardHeader>
