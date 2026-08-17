@@ -34,7 +34,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
-const KIMI_API_URL = "https://api.moonshot.cn/v1/chat/completions";
+const KIMI_API_URL = "https://api.moonshot.ai/v1/chat/completions";
 const KIMI_MODEL = "moonshot-v1-8k";
 const LS_KEY = "ai-concierge-settings";
 
@@ -291,7 +291,8 @@ export default function HomePage() {
                     onChange={(e) =>
                       setSettings((s) => ({ ...s, corsProxy: e.target.value }))
                     }
-                  />\n                  <p className="text-xs text-muted-foreground">
+                  />
+                    <p className="text-xs text-muted-foreground">
                     Нужен для вызова API из браузера на GitHub Pages.
                     Например: https://corsproxy.io/?
                   </p>

@@ -204,7 +204,7 @@ export default function PassportPage() {
                     variant="outline"
                     className="text-xs text-muted-foreground font-normal"
                   >
-                    Демо: данные сохраняются только локально
+                    Демо: данные сохраняются только локально и никак не обрабатываются, вводите фиктивные данные
                   </Badge>
                 </div>
 
