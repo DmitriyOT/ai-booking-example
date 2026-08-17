@@ -11,16 +11,6 @@ const nextConfig: NextConfig = {
   images: { unoptimized: true },
   typescript: { ignoreBuildErrors: true },
   reactStrictMode: false,
-  // Rewrites работают только в dev-режиме (не при export)
-  // Браузер вызывает /api/kimi/... → Next.js проксирует на Kimi API (без CORS)
-  async rewrites() {
-    return [
-      {
-        source: "/api/kimi/:path*",
-        destination: "https://api.moonshot.ai/v1/:path*",
-      },
-    ];
-  },
 };
 
 export default nextConfig;

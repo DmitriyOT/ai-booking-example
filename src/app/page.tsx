@@ -46,22 +46,21 @@ const LS_KEY = "ai-concierge-settings";
 
 interface Settings {
   apiKey: string;
-  proxyUrl: string;
   stubMode: boolean;
 }
 
 function loadSettings(): Settings {
-  if (typeof window === "undefined") return { apiKey: "", proxyUrl: "", stubMode: false };
+  if (typeof window === "undefined") return { apiKey: "", stubMode: false };
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      return { ...{ apiKey: "", proxyUrl: "", stubMode: false }, ...parsed };
+      return { ...{ apiKey: "", stubMode: false }, ...parsed };
     }
   } catch {
     /* ignore */
   }
-  return { apiKey: "", proxyUrl: "", stubMode: false };
+  return { apiKey: "", stubMode: false };
 }
 
 function saveSettings(s: Settings) {
@@ -126,19 +125,12 @@ function buildSystemPrompt(passportReceived: boolean) {
 Отвечай вежливо, кратко и по делу. Отвечай только на русском языке. Не придумывай информацию, которой нет в контексте. Если гость спрашивает о чём-то несвязанном с бронированием — мягко скажи, что ты можешь помочь только по вопросам бронирования и заселения.`;
 }
 
-function getApiBaseUrl(proxyUrl: string): string {
-  if (proxyUrl.trim()) return proxyUrl.trim().replace(/\/+$/, "");
-  return "/api/kimi";
-}
-
 async function callKimi(
   apiKey: string,
-  proxyUrl: string,
   systemPrompt: string,
   userMessage: string
 ): Promise<string> {
-  const baseUrl = getApiBaseUrl(proxyUrl);
-  const url = `${baseUrl}/chat/completions`;
+  const url = "https://api.moonshot.ai/v1/chat/completions";
 
   let res: Response;
   try {
@@ -158,12 +150,7 @@ async function callKimi(
     });
   } catch (err) {
     if (err instanceof TypeError) {
-      throw new Error(
-        "Сетевая ошибка или CORS заблокирован. " +
-          (proxyUrl.trim()
-            ? "Проверьте URL прокси."
-            : "В dev-режиме работает через Next.js rewrite. Для GitHub Pages нужен CORS-прокси (см. cloudflare-worker.js).")
-      );
+      throw new Error("Сетевая ошибка. Проверьте подключение к интернету.");
     }
     throw err;
   }
@@ -180,9 +167,6 @@ async function callKimi(
       detail = "Неверный API-ключ. Проверьте ключ на platform.moonshot.ai";
     if (res.status === 402)
       detail = "Недостаточно средств на аккаунте Kimi";
-    if (res.status === 404 && !proxyUrl.trim())
-      detail =
-        "Эндпоинт /api/kimi не найден. Для GitHub Pages укажите URL прокси в настройках.";
     throw new Error(detail);
   }
 
@@ -195,7 +179,6 @@ async function callKimi(
 export default function HomePage() {
   const [settings, setSettings] = useState<Settings>({
     apiKey: "",
-    proxyUrl: "",
     stubMode: true,
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -254,7 +237,6 @@ export default function HomePage() {
         const systemPrompt = buildSystemPrompt(passportReceived);
         response = await callKimi(
           settings.apiKey,
-          settings.proxyUrl,
           systemPrompt,
           trimmed
         );
@@ -343,19 +325,7 @@ export default function HomePage() {
                     </a>
                   </p>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="proxy-url">URL CORS-прокси</Label>
-                  <Input
-                    id="proxy-url"
-                    placeholder="https://your-worker.workers.dev"
-                    value={settings.proxyUrl}
-                    onChange={(e) => setSettings((s) => ({ ...s, proxyUrl: e.target.value }))}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Dev-режим: оставить пустым (Next.js rewrite). Для GitHub Pages:
-                    задеплойте <code className="text-xs bg-muted px-1 py-0.5 rounded">cloudflare-worker.js</code> на Cloudflare Workers.
-                  </p>
-                </div>
+
               </div>
               <DialogFooter>
                 <Button onClick={handleSaveSettings} disabled={!settings.apiKey.trim() && !settings.stubMode}>

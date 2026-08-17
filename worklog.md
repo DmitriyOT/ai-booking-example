@@ -133,3 +133,22 @@ Stage Summary:
 - Passport page now in demo-only mode with locked fields and checkbox confirmation
 - No real data can be entered
 - Full flow verified via browser: checkbox → submit → success → back to chat
+
+---
+Task ID: 8
+Agent: Main
+Task: Remove Next.js rewrite proxy, remove CORS proxy option, use direct Kimi API calls
+
+Work Log:
+- Removed `rewrites()` block from next.config.ts (no more /api/kimi proxy)
+- Removed `proxyUrl` from Settings interface and all references
+- Removed `getApiBaseUrl()` helper function
+- Changed `callKimi()` to call `https://api.moonshot.ai/v1/chat/completions` directly
+- Removed CORS proxy URL input field and its hint text from settings dialog
+- Simplified error messages (removed proxy-specific messages)
+- Lint passes clean, browser verified: no proxy fields, chat with stubs works
+
+Stage Summary:
+- All API calls go directly to api.moonshot.ai (no Next.js rewrite, no CORS proxy)
+- Settings dialog now has only: stub mode toggle + API key field
+- cloudflare-worker.js still exists in repo but is no longer referenced
