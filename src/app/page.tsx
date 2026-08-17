@@ -309,9 +309,12 @@ async function callKimiSingle(
   apiKey: string,
   model: string,
   systemPrompt: string,
-  userMessage: string
+  userMessage: string,
+  messages: ChatMessage[]
 ): Promise<string> {
   const url = "https://api.moonshot.ai/v1/chat/completions";
+
+  const oldMessages = messages.slice(1);
 
   let res: Response;
   try {
@@ -325,7 +328,8 @@ async function callKimiSingle(
         model,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userMessage },
+          ...oldMessages,
+          //{ role: "user", content: userMessage },
         ],
       }),
     });
@@ -362,7 +366,8 @@ async function callKimiWithFallback(
   apiKey: string,
   preferredModel: string,
   systemPrompt: string,
-  userMessage: string
+  userMessage: string,
+  messages: ChatMessage[]
 ): Promise<string> {
   // Build ordered list: preferred first, then the rest
   const otherModels = KIMI_MODELS.filter((m) => m !== preferredModel);
@@ -371,7 +376,7 @@ async function callKimiWithFallback(
 
   for (const model of modelsToTry) {
     try {
-      return await callKimiSingle(apiKey, model, systemPrompt, userMessage);
+      return await callKimiSingle(apiKey, model, systemPrompt, userMessage, messages);
     } catch (err) {
       if (err instanceof RateLimitError) {
         errors.push(model);
@@ -482,7 +487,8 @@ export default function HomePage() {
           settings.apiKey,
           settings.model,
           systemPrompt,
-          text.trim()
+          text.trim(),
+          messages
         );
       }
       const withReply = [...updated, { role: "assistant" as const, content: response }];
