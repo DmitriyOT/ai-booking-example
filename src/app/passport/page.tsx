@@ -24,6 +24,7 @@ import {
   CalendarDays,
   ShieldAlert,
   FileCheck,
+  Info,
 } from "lucide-react";
 
 const DEMO_DATA = {
@@ -36,6 +37,14 @@ const DEMO_DATA = {
 export default function PassportPage() {
   const [confirmed, setConfirmed] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [alreadyLoaded] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("ai-concierge-passport") === "true";
+    } catch {
+      return false;
+    }
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,6 +56,64 @@ export default function PassportPage() {
     }
     setSubmitted(true);
   };
+
+  if (alreadyLoaded && !submitted) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-50 to-white">
+        <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+          <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-3">
+            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-primary-foreground">
+              <Hotel className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold leading-tight">AI-консьерж</h1>
+              <p className="text-sm text-muted-foreground">Загрузка паспорта</p>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Card>
+              <CardContent className="py-12 flex flex-col items-center text-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                </div>
+                <h2 className="text-xl font-semibold">Паспорт уже загружен</h2>
+                <p className="text-sm text-muted-foreground max-w-sm">
+                  Ваши данные паспорта уже были подтверждены ранее.
+                  Повторная загрузка не требуется.
+                </p>
+                <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 max-w-sm">
+                  <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>Следующий этап — оплата залога. Вернитесь в чат для получения деталей.</span>
+                </div>
+                <div className="mt-2">
+                  <Button asChild>
+                    <Link href="/">
+                      <ArrowLeft className="w-4 h-4 mr-2" />
+                      Вернуться в чат
+                    </Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </main>
+
+        <footer className="border-t bg-white/80 backdrop-blur-sm mt-auto">
+          <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 text-center text-xs text-muted-foreground">
+            Прототип интеграции ИИ с данными бронирования &middot; Powered by Kimi
+            Platform
+          </div>
+        </footer>
+      </div>
+    );
+  }
 
   if (submitted) {
     return (

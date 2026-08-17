@@ -172,3 +172,51 @@ Stage Summary:
 - Both `[text](url)` and `https://...` are clickable in AI responses
 - Internal links (e.g., /passport) work for same-origin navigation
 - External links open in new tab with rel=noopener noreferrer
+
+---
+Task ID: 10
+Agent: Main
+Task: Add passport link to all AI responses + full markdown rendering (bold, italic, lists)
+
+Work Log:
+- Updated all stub responses to include clickable [text](/passport) links when passport is not received
+- Greeting now proactively offers "Перейти к загрузке паспорта →" link
+- Default/fallback responses also include passport link
+- Payment and room key responses now include passport link when not received
+- Updated system prompt to instruct AI to always use markdown link format [загрузить паспорт](/passport)
+- Added formatting instructions to system prompt: **bold**, *italic*, numbered lists, markdown links
+- Completely rewrote `renderMessageContent()` with new architecture:
+  - `renderInlineMarkdown(text)` — single-pass regex parser for bold, italic, md-links, plain URLs
+  - `renderTextWithBreaks(text, key)` — handles \n → <br/> and list item detection (1., -, *)
+  - `renderMessageContent(text)` — splits by \n\n for paragraph spacing, delegates to renderInlineMarkdown
+- Bold (**text**) renders as <strong> with font-semibold
+- Italic (*text*) renders as <em> with italic
+- Numbered lists (1. 2. 3.) get bold number prefix
+- Dash lists (-, *) render with bullet • character
+- Link labels support nested markdown (recursive renderInlineMarkdown)
+- Browser verified: bold (4 elements), italic (1 element), 3 internal /passport links, numbered list formatting
+- Lint passes clean, no dev server errors
+
+Stage Summary:
+- AI always provides clickable passport link when passport not received
+- Full inline markdown rendering: bold, italic, links, lists, paragraph breaks
+- Recursive rendering supports markdown inside link labels
+
+---
+Task ID: 11
+Agent: Main
+Task: No passport link when already received + "already loaded" screen on /passport
+
+Work Log:
+- Updated system prompt rule 2: explicit instruction to NEVER give /passport link when passport is already received
+- Changed formatting section: generalized link format example from hardcoded /passport to /путь
+- Added `alreadyLoaded` state to passport page using lazy useState initializer (reads localStorage on mount)
+- Added "Паспорт уже загружен" screen with green CheckCircle2 icon, explanation text, info box about next step (оплата залога), and "Вернуться в чат" button
+- The already-loaded screen renders before the form and before the just-submitted success screen
+- Used lazy initializer instead of useEffect to avoid react-hooks/set-state-in-effect lint error
+- Browser verified: with passport flag set, greeting has no link; /passport shows "already loaded" screen; without flag, form renders normally
+
+Stage Summary:
+- System prompt explicitly forbids /passport link when passport received
+- /passport page shows "Паспорт уже загружен" with next-step info when passport already in localStorage
+- No lint errors

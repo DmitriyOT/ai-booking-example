@@ -1,0 +1,687 @@
+     1→"use client";
+     2→
+     3→import { useState, useCallback, useEffect, useRef } from "react";
+     4→import Link from "next/link";
+     5→import { motion } from "framer-motion";
+     6→import {
+     7→  Card,
+     8→  CardContent,
+     9→  CardHeader,
+    10→  CardTitle,
+    11→  CardDescription,
+    12→} from "@/components/ui/card";
+    13→import { Switch } from "@/components/ui/switch";
+    14→import { Textarea } from "@/components/ui/textarea";
+    15→import { Button } from "@/components/ui/button";
+    16→import { Badge } from "@/components/ui/badge";
+    17→import { Label } from "@/components/ui/label";
+    18→import { Input } from "@/components/ui/input";
+    19→import {
+    20→  Dialog,
+    21→  DialogContent,
+    22→  DialogDescription,
+    23→  DialogFooter,
+    24→  DialogHeader,
+    25→  DialogTitle,
+    26→  DialogTrigger,
+    27→} from "@/components/ui/dialog";
+    28→import {
+    29→  MessageSquare,
+    30→  Send,
+    31→  FileCheck,
+    32→  FileX,
+    33→  Bot,
+    34→  Hotel,
+    35→  Loader2,
+    36→  Settings,
+    37→  ExternalLink,
+    38→  Eye,
+    39→  EyeOff,
+    40→  AlertTriangle,
+    41→  ShieldCheck,
+    42→  Trash2,
+    43→} from "lucide-react";
+    44→
+    45→const KIMI_MODEL = "moonshot-v1-8k";
+    46→const LS_KEY = "ai-concierge-settings";
+    47→const LS_MESSAGES_KEY = "ai-concierge-messages";
+    48→const LS_PASSPORT_KEY = "ai-concierge-passport";
+    49→
+    50→interface Settings {
+    51→  apiKey: string;
+    52→  stubMode: boolean;
+    53→}
+    54→
+    55→function loadSettings(): Settings {
+    56→  if (typeof window === "undefined") return { apiKey: "", stubMode: false };
+    57→  try {
+    58→    const raw = localStorage.getItem(LS_KEY);
+    59→    if (raw) {
+    60→      const parsed = JSON.parse(raw);
+    61→      return { ...{ apiKey: "", stubMode: false }, ...parsed };
+    62→    }
+    63→  } catch {
+    64→    /* ignore */
+    65→  }
+    66→  return { apiKey: "", stubMode: false };
+    67→}
+    68→
+    69→function saveSettings(s: Settings) {
+    70→  try {
+    71→    localStorage.setItem(LS_KEY, JSON.stringify(s));
+    72→  } catch {
+    73→    /* ignore */
+    74→  }
+    75→}
+    76→
+    77→function loadMessages(): ChatMessage[] {
+    78→  if (typeof window === "undefined") return [];
+    79→  try {
+    80→    const raw = localStorage.getItem(LS_MESSAGES_KEY);
+    81→    if (raw) return JSON.parse(raw);
+    82→  } catch {
+    83→    /* ignore */
+    84→  }
+    85→  return [];
+    86→}
+    87→
+    88→function saveMessages(msgs: ChatMessage[]) {
+    89→  try {
+    90→    localStorage.setItem(LS_MESSAGES_KEY, JSON.stringify(msgs));
+    91→  } catch {
+    92→    /* ignore */
+    93→  }
+    94→}
+    95→
+    96→function loadPassportReceived(): boolean {
+    97→  if (typeof window === "undefined") return false;
+    98→  try {
+    99→    return localStorage.getItem(LS_PASSPORT_KEY) === "true";
+   100→  } catch {
+   101→    return false;
+   102→  }
+   103→}
+   104→
+   105→function savePassportReceived(v: boolean) {
+   106→  try {
+   107→    localStorage.setItem(LS_PASSPORT_KEY, String(v));
+   108→  } catch {
+   109→    /* ignore */
+   110→  }
+   111→}
+   112→
+   113→interface ChatMessage {
+   114→  role: "user" | "assistant";
+   115→  content: string;
+   116→}
+   117→
+   118→function getStubResponse(passportReceived: boolean, userMessage: string): string {
+   119→  const msg = userMessage.toLowerCase();
+   120→  if (msg.includes("паспорт") || msg.includes("загруз") || msg.includes("документ")) {
+   121→    return passportReceived
+   122→      ? "Ваш паспорт уже получен и проверен ✓. Можете переходить к следующему этапу — оплате залога."
+   123→      : "Для начала процесса заселения необходимо загрузить копию паспорта. Это первый обязательный шаг. Пожалуйста, перейдите на страницу загрузки паспорта: [загрузить паспорт](/passport).";
+   124→  }
+   125→  if (msg.includes("засел") || msg.includes("заселиться") || msg.includes("как") && msg.includes("мне")) {
+   126→    return passportReceived
+   127→      ? "Ваш паспорт уже на руках! Следующий шаг — оплата залога. После подтверждения оплаты мы подготовим ваш номер к заезду."
+   128→      : "Процесс заселения состоит из нескольких этапов:\n\n1. **Загрузка паспорта** — сейчас этот шаг не завершён\n2. **Оплата залога** — после получения паспорта\n3. **Получение ключа** — после оплаты\n\nПожалуйста, начните с загрузки паспорта — это обязательный первый шаг: [загрузить паспорт](/passport).";
+   129→  }
+   130→  if (msg.includes("оплат") || msg.includes("залог") || msg.includes("деньг") || msg.includes("карт")) {
+   131→    return passportReceived
+   132→      ? "Оплатить залог можно картой при заселении или заранее онлайн. Сумма залога зависит от категории номера и будет списана при заселении."
+   133→      : "Оплата залога — это второй этап после загрузки паспорта. Сначала необходимо загрузить паспорт, затем мы направим вам ссылку на оплату.";
+   134→  }
+   135→  if (msg.includes("ключ") || msg.includes("номер") || msg.includes("комнат")) {
+   136→    return passportReceived
+   137→      ? "После оплаты залога вы получите ключ от номера на ресепшен. Номер будет готов к вашему заезду."
+   138→      : "Получение ключа — финальный этап. Перед этим нужно загрузить паспорт и оплатить залог.";
+   139→  }
+   140→  if (msg.includes("привет") || msg.includes("здравствуй") || msg.includes("добр")) {
+   141→    return passportReceived
+   142→      ? "Здравствуйте! Рады вас видеть. Ваш паспорт уже получен. Чем могу помочь?"
+   143→      : "Здравствуйте! Добро пожаловать. Я — ваш виртуальный консьерж. Для начала процесса заселения необходимо загрузить паспорт. Могу я помочь вам с этим?";
+   144→  }
+   145→  if (msg.includes("спасибо") || msg.includes("благодар")) {
+   146→    return "Пожалуйста! Обращайтесь, если возникнут вопросы по бронированию или заселению. Я всегда на связи.";
+   147→  }
+   148→  // default
+   149→  return passportReceived
+   150→    ? "Спасибо за вопрос. Ваш паспорт уже получен. Если у вас есть вопросы по оплате залога или подготовке номера — задавайте, с радостью помогу!"
+   151→    : "Спасибо за вопрос. Напоминаю, что первым шагом для заселения является загрузка паспорта. Если у вас есть вопросы по этому процессу — спрашивайте!";
+   152→}
+   153→
+   154→function renderMessageContent(text: string) {
+   155→  // 1) Markdown-style links: [text](url)
+   156→  // 2) Plain URLs: https://...
+   157→  // Everything else stays as plain text
+   158→  const parts: (string | { type: "link"; href: string; label: string })[] = [];
+   159→  // Match markdown links first, then plain URLs; everything else is text
+   160→  const pattern = /\[([^\]]+)\]\(([^)]+)\)|(https?:\/\/[^\s)<>]+)/g;
+   161→  let lastIndex = 0;
+   162→  let match: RegExpExecArray | null;
+   163→
+   164→  while ((match = pattern.exec(text)) !== null) {
+   165→    if (match.index > lastIndex) {
+   166→      parts.push(text.slice(lastIndex, match.index));
+   167→    }
+   168→    if (match[1] !== undefined) {
+   169→      // Markdown link [label](href)
+   170→      parts.push({ type: "link", href: match[2], label: match[1] });
+   171→    } else {
+   172→      // Plain URL
+   173→      const url = match[0];
+   174→      // Use the URL as label but truncate if very long
+   175→      const label = url.length > 50 ? url.slice(0, 47) + "..." : url;
+   176→      parts.push({ type: "link", href: url, label });
+   177→    }
+   178→    lastIndex = match.index + match[0].length;
+   179→  }
+   180→  if (lastIndex < text.length) {
+   181→    parts.push(text.slice(lastIndex));
+   182→  }
+   183→
+   184→  return parts.map((part, i) => {
+   185→    if (typeof part === "string") {
+   186→      // Preserve line breaks inside plain text segments
+   187→      return part.split("\n").map((line, j, arr) => (
+   188→        <span key={`${i}-${j}`}>
+   189→          {line}
+   190→          {j < arr.length - 1 && <br />}
+   191→        </span>
+   192→      ));
+   193→    }
+   194→    const isInternal = part.href.startsWith('/');
+   195→    if (isInternal) {
+   196→      return (
+   197→        <Link
+   198→          key={`l-${i}`}
+   199→          href={part.href}
+   200→          className="underline underline-offset-2 text-primary hover:text-primary/80 transition-colors"
+   201→        >
+   202→          {part.label}
+   203→        </Link>
+   204→      );
+   205→    }
+   206→    return (
+   207→      <a
+   208→        key={`l-${i}`}
+   209→        href={part.href}
+   210→        target="_blank"
+   211→        rel="noopener noreferrer"
+   212→        className="underline underline-offset-2 text-primary hover:text-primary/80 transition-colors"
+   213→      >
+   214→        {part.label}
+   215→      </a>
+   216→    );
+   217→  });
+   218→}
+   219→
+   220→function buildSystemPrompt(passportReceived: boolean) {
+   221→  return `Ты — интеллектуальный консьерж отеля. Ты отвечаешь на вопросы гостя о процессе бронирования и заселения.
+   222→
+   223→Текущий статус бронирования:
+   224→- Паспорт: ${passportReceived ? "получен ✓" : "не получен ✗"}
+   225→
+   226→Правила заселения:
+   227→1. Сначала гость должен предоставить паспорт. Если паспорт ещё не получен — напомни гостю, что это первый необходимый шаг, и дай ссылку для загрузки: /passport
+   228→2. После получения паспорта следующий этап — оплата залога.
+   229→
+   230→Отвечай вежливо, кратко и по делу. Отвечай только на русском языке. Не придумывай информацию, которой нет в контексте. Если гость спрашивает о чём-то несвязанном с бронированием — мягко скажи, что ты можешь помочь только по вопросам бронирования и заселения.`;
+   231→}
+   232→
+   233→async function callKimi(
+   234→  apiKey: string,
+   235→  systemPrompt: string,
+   236→  userMessage: string
+   237→): Promise<string> {
+   238→  const url = "https://api.moonshot.ai/v1/chat/completions";
+   239→
+   240→  let res: Response;
+   241→  try {
+   242→    res = await fetch(url, {
+   243→      method: "POST",
+   244→      headers: {
+   245→        "Content-Type": "application/json",
+   246→        Authorization: `Bearer ${apiKey}`,
+   247→      },
+   248→      body: JSON.stringify({
+   249→        model: KIMI_MODEL,
+   250→        messages: [
+   251→          { role: "system", content: systemPrompt },
+   252→          { role: "user", content: userMessage },
+   253→        ],
+   254→      }),
+   255→    });
+   256→  } catch (err) {
+   257→    if (err instanceof TypeError) {
+   258→      throw new Error("Сетевая ошибка. Проверьте подключение к интернету.");
+   259→    }
+   260→    throw err;
+   261→  }
+   262→
+   263→  if (!res.ok) {
+   264→    let detail = `HTTP ${res.status}`;
+   265→    try {
+   266→      const body = await res.json();
+   267→      detail = body?.error?.message || body?.error || detail;
+   268→    } catch {
+   269→      /* ignore */
+   270→    }
+   271→    if (res.status === 401)
+   272→      detail = "Неверный API-ключ. Проверьте ключ на platform.moonshot.ai";
+   273→    if (res.status === 402)
+   274→      detail = "Недостаточно средств на аккаунте Kimi";
+   275→    throw new Error(detail);
+   276→  }
+   277→
+   278→  const data = await res.json();
+   279→  const content = data.choices?.[0]?.message?.content;
+   280→  if (!content) throw new Error("Пустой ответ от ИИ");
+   281→  return content;
+   282→}
+   283→
+   284→export default function HomePage() {
+   285→  const [settings, setSettings] = useState<Settings>({
+   286→    apiKey: "",
+   287→    stubMode: true,
+   288→  });
+   289→  const [settingsOpen, setSettingsOpen] = useState(false);
+   290→  const [showKey, setShowKey] = useState(false);
+   291→  const [passportReceived, setPassportReceived] = useState(false);
+   292→  const [message, setMessage] = useState("");
+   293→  const [messages, setMessages] = useState<ChatMessage[]>([]);
+   294→  const messagesLoadedRef = useRef(false);
+   295→  const [isLoading, setIsLoading] = useState(false);
+   296→  const [error, setError] = useState<string | null>(null);
+   297→  const chatEndRef = useRef<HTMLDivElement>(null);
+   298→
+   299→  useEffect(() => {
+   300→    const s = loadSettings();
+   301→    setSettings(s);
+   302→    if (!s.apiKey && !s.stubMode) setSettingsOpen(true);
+   303→    if (!messagesLoadedRef.current) {
+   304→      messagesLoadedRef.current = true;
+   305→      setMessages(loadMessages());
+   306→      setPassportReceived(loadPassportReceived());
+   307→    }
+   308→  }, []);
+   309→
+   310→  useEffect(() => {
+   311→    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+   312→  }, [messages, isLoading]);
+   313→
+   314→  // Sync passport status when tab gains focus (e.g. user returns from /passport)
+   315→  useEffect(() => {
+   316→    const onStorage = () => {
+   317→      setPassportReceived(loadPassportReceived());
+   318→    };
+   319→    const onFocus = () => {
+   320→      setPassportReceived(loadPassportReceived());
+   321→    };
+   322→    window.addEventListener('storage', onStorage);
+   323→    window.addEventListener('focus', onFocus);
+   324→    return () => {
+   325→      window.removeEventListener('storage', onStorage);
+   326→      window.removeEventListener('focus', onFocus);
+   327→    };
+   328→  }, []);
+   329→
+   330→  const handleClearMessages = useCallback(() => {
+   331→    setMessages([]);
+   332→    setError(null);
+   333→    try { localStorage.removeItem(LS_MESSAGES_KEY); } catch { /* ignore */ }
+   334→  }, []);
+   335→
+   336→  const handleSaveSettings = useCallback(() => {
+   337→    saveSettings(settings);
+   338→    setSettingsOpen(false);
+   339→  }, [settings]);
+   340→
+   341→  const handleToggleStub = useCallback(() => {
+   342→    setSettings((s) => {
+   343→      const next = { ...s, stubMode: !s.stubMode };
+   344→      saveSettings(next);
+   345→      return next;
+   346→    });
+   347→  }, []);
+   348→
+   349→  const handleSend = useCallback(async () => {
+   350→    const trimmed = message.trim();
+   351→    if (!trimmed || isLoading) return;
+   352→
+   353→    if (!settings.apiKey.trim() && !settings.stubMode) {
+   354→      setSettingsOpen(true);
+   355→      return;
+   356→    }
+   357→
+   358→    setError(null);
+   359→    const updated = [...messages, { role: "user" as const, content: trimmed }];
+   360→    setMessages(updated);
+   361→    saveMessages(updated);
+   362→    setMessage("");
+   363→    setIsLoading(true);
+   364→
+   365→    try {
+   366→      let response: string;
+   367→      if (settings.stubMode) {
+   368→        // Simulate network delay for realism
+   369→        await new Promise((r) => setTimeout(r, 800 + Math.random() * 700));
+   370→        response = getStubResponse(passportReceived, trimmed);
+   371→      } else {
+   372→        const systemPrompt = buildSystemPrompt(passportReceived);
+   373→        response = await callKimi(
+   374→          settings.apiKey,
+   375→          systemPrompt,
+   376→          trimmed
+   377→        );
+   378→      }
+   379→      const withReply = [...updated, { role: "assistant" as const, content: response }];
+   380→      setMessages(withReply);
+   381→      saveMessages(withReply);
+   382→    } catch (err) {
+   383→      const msg =
+   384→        err instanceof Error ? err.message : "Произошла неизвестная ошибка";
+   385→      setError(msg);
+   386→      // Revert: remove the user message we just added
+   387→      const reverted = updated.slice(0, -1);
+   388→      setMessages(reverted);
+   389→      saveMessages(reverted);
+   390→    } finally {
+   391→      setIsLoading(false);
+   392→    }
+   393→  }, [message, messages, passportReceived, isLoading, settings]);
+   394→
+   395→  const handlePassportToggle = useCallback((v: boolean) => {
+   396→    setPassportReceived(v);
+   397→    savePassportReceived(v);
+   398→  }, []);
+   399→
+   400→  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+   401→    if (e.key === "Enter" && !e.shiftKey) {
+   402→      e.preventDefault();
+   403→      handleSend();
+   404→    }
+   405→  };
+   406→
+   407→  return (
+   408→    <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-50 to-white">
+   409→      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+   410→        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+   411→          <div className="flex items-center gap-3">
+   412→            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-primary-foreground">
+   413→              <Hotel className="w-5 h-5" />
+   414→            </div>
+   415→            <div>
+   416→              <h1 className="text-lg font-semibold leading-tight">AI-консьерж</h1>
+   417→              <p className="text-sm text-muted-foreground">Помощник по бронированию</p>
+   418→            </div>
+   419→          </div>
+   420→          <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+   421→            <DialogTrigger asChild>
+   422→              <Button variant="outline" size="icon" className="shrink-0" aria-label="Настройки">
+   423→                <Settings className="w-4 h-4" />
+   424→              </Button>
+   425→            </DialogTrigger>
+   426→            <DialogContent>
+   427→              <DialogHeader>
+   428→                <DialogTitle>Настройки</DialogTitle>
+   429→                <DialogDescription>Подключение к Kimi Platform API</DialogDescription>
+   430→              </DialogHeader>
+   431→              <div className="flex flex-col gap-4 py-2">
+   432→                <div className="flex items-center justify-between rounded-lg border p-3">
+   433→                  <div className="flex flex-col gap-0.5">
+   434→                    <Label htmlFor="stub-toggle" className="text-sm font-medium flex items-center gap-1.5">
+   435→                      <Bot className="w-3.5 h-3.5" />
+   436→                      Режим заглушек
+   437→                    </Label>
+   438→                    <p className="text-xs text-muted-foreground">Имитация ответов ИИ без API-ключа</p>
+   439→                  </div>
+   440→                  <Switch id="stub-toggle" checked={settings.stubMode} onCheckedChange={(v) => setSettings((s) => ({ ...s, stubMode: v }))} />
+   441→                </div>
+   442→                <div className="flex flex-col gap-2">
+   443→                  <Label htmlFor="api-key" className="flex items-center gap-1.5">
+   444→                    <ShieldCheck className="w-3.5 h-3.5" />
+   445→                    Kimi API-ключ *
+   446→                  </Label>
+   447→                  <div className="relative">
+   448→                    <Input
+   449→                      id="api-key"
+   450→                      type={showKey ? "text" : "password"}
+   451→                      placeholder="sk-..."
+   452→                      value={settings.apiKey}
+   453→                      onChange={(e) => setSettings((s) => ({ ...s, apiKey: e.target.value }))}
+   454→                    />
+   455→                    <Button
+   456→                      type="button"
+   457→                      variant="ghost"
+   458→                      size="icon"
+   459→                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+   460→                      onClick={() => setShowKey((v) => !v)}
+   461→                      aria-label={showKey ? "Скрыть" : "Показать"}
+   462→                    >
+   463→                      {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+   464→                    </Button>
+   465→                  </div>
+   466→                  <p className="text-xs text-muted-foreground">
+   467→                    Получите ключ на{" "}
+   468→                    <a href="https://platform.moonshot.ai" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">
+   469→                      platform.moonshot.ai
+   470→                    </a>
+   471→                  </p>
+   472→                </div>
+   473→
+   474→              </div>
+   475→              <DialogFooter>
+   476→                <Button onClick={handleSaveSettings} disabled={!settings.apiKey.trim() && !settings.stubMode}>
+   477→                  Сохранить
+   478→                </Button>
+   479→              </DialogFooter>
+   480→            </DialogContent>
+   481→          </Dialog>
+   482→        </div>
+   483→      </header>
+   484→
+   485→      <main className="flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-6">
+   486→        <Card>
+   487→          <CardHeader>
+   488→            <CardTitle className="flex items-center gap-2 text-base">
+   489→              <FileCheck className="w-4 h-4" />
+   490→              Статус бронирования
+   491→            </CardTitle>
+   492→            <CardDescription>Управляйте статусом получения паспорта гостя</CardDescription>
+   493→          </CardHeader>
+   494→          <CardContent>
+   495→            <div className="flex items-center justify-between gap-4">
+   496→              <div className="flex items-center gap-3 min-w-0">
+   497→                {passportReceived ? (
+   498→                  <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0">
+   499→                    <FileCheck className="w-3 h-3 mr-1" /> Паспорт получен
+   500→                  </Badge>
+   501→                ) : (
+   502→                  <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-200 shrink-0">
+   503→                    <FileX className="w-3 h-3 mr-1" /> Паспорт не получен
+   504→                  </Badge>
+   505→                )}
+   506→              </div>
+   507→              <div className="flex items-center gap-2 shrink-0">
+   508→                <Label htmlFor="passport-toggle" className="text-sm text-muted-foreground cursor-pointer">Получен</Label>
+   509→                <Switch id="passport-toggle" checked={passportReceived} onCheckedChange={handlePassportToggle} />
+   510→              </div>
+   511→            </div>
+   512→            {!passportReceived && (
+   513→              <div className="mt-4 flex items-center gap-2 text-sm">
+   514→                <ExternalLink className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+   515→                <Link href="/passport" className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors">
+   516→                  Страница загрузки паспорта →
+   517→                </Link>
+   518→              </div>
+   519→            )}
+   520→          </CardContent>
+   521→        </Card>
+   522→
+   523→        {settings.stubMode && (
+   524→          <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+   525→            <Bot className="w-5 h-5 shrink-0 mt-0.5" />
+   526→            <div>
+   527→              <p className="font-medium">Режим заглушек активен</p>
+   528→              <p className="mt-1">
+   529→                Ответы ИИ имитируются локально. Для реальных ответов введите API-ключ в{" "}
+   530→                <button onClick={() => setSettingsOpen(true)} className="underline underline-offset-2 font-medium hover:text-blue-900">
+   531→                  настройках
+   532→                </button>.
+   533→              </p>
+   534→            </div>
+   535→          </div>
+   536→        )}
+   537→
+   538→        {!settings.apiKey.trim() && !settings.stubMode && !settingsOpen && (
+   539→          <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+   540→            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+   541→            <div>
+   542→              <p className="font-medium">API-ключ не задан</p>
+   543→              <p className="mt-1">
+   544→                Нажмите{" "}
+   545→                <button onClick={() => setSettingsOpen(true)} className="underline underline-offset-2 font-medium hover:text-amber-900">
+   546→                  здесь
+   547→                </button>
+   548→                , чтобы ввести ключ Kimi Platform или включите режим заглушек.
+   549→              </p>
+   550→            </div>
+   551→          </div>
+   552→        )}
+   553→
+   554→        <Card className="flex-1 flex flex-col">
+   555→          <CardHeader className="pb-3">
+   556→            <CardTitle className="flex items-center gap-2 text-base">
+   557→              <MessageSquare className="w-4 h-4" /> Чат с ИИ
+   558→            </CardTitle>
+   559→            <CardDescription className="flex items-center justify-between">
+   560→              <span className="flex items-center gap-2">
+   561→                Задайте вопрос об этапах заселения
+   562→                {settings.stubMode && (
+   563→                  <Badge variant="outline" className="text-blue-600 border-blue-300 bg-blue-50 text-[10px] px-1.5 py-0">
+   564→                    STUB
+   565→                  </Badge>
+   566→                )}
+   567→              </span>
+   568→              {messages.length > 0 && (
+   569→                <Button
+   570→                  variant="ghost"
+   571→                  size="sm"
+   572→                  className="h-7 px-2 text-muted-foreground hover:text-destructive"
+   573→                  onClick={handleClearMessages}
+   574→                  aria-label="Очистить историю"
+   575→                >
+   576→                  <Trash2 className="w-3.5 h-3.5 mr-1" />
+   577→                  Очистить
+   578→                </Button>
+   579→              )}
+   580→            </CardDescription>
+   581→          </CardHeader>
+   582→          <CardContent className="flex flex-col flex-1 gap-4">
+   583→            <div className="min-h-[200px] max-h-[400px] overflow-y-auto rounded-lg border bg-muted/30 p-4 flex flex-col gap-3">
+   584→              {messages.length === 0 && !isLoading && (
+   585→                <div className="flex-1 flex flex-col items-center justify-center text-center py-8 text-muted-foreground">
+   586→                  <Bot className="w-10 h-10 mb-3 opacity-40" />
+   587→                  <p className="text-sm font-medium">Начните диалог</p>
+   588→                  <p className="text-xs mt-1 max-w-xs">
+   589→                    Спросите, например: &laquo;Как мне заселиться?&raquo; или &laquo;Что мне делать дальше?&raquo;
+   590→                  </p>
+   591→                </div>
+   592→              )}
+   593→              {messages.map((msg, i) => (
+   594→                <motion.div
+   595→                  key={`msg-${i}`}
+   596→                  initial={{ opacity: 0, y: 8 }}
+   597→                  animate={{ opacity: 1, y: 0 }}
+   598→                  transition={{ duration: 0.2 }}
+   599→                  className={`flex gap-2.5 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+   600→                >
+   601→                  {msg.role === "assistant" && (
+   602→                    <div className="shrink-0 w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center mt-0.5">
+   603→                      <Bot className="w-4 h-4 text-primary" />
+   604→                    </div>
+   605→                  )}
+   606→                  <div
+   607→                    className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed break-words ${
+   608→                      msg.role === "user"
+   609→                        ? "bg-primary text-primary-foreground rounded-br-md"
+   610→                        : "bg-muted rounded-bl-md"
+   611→                    }`}
+   612→                  >
+   613→                    {msg.role === "assistant"
+   614→                      ? renderMessageContent(msg.content)
+   615→                      : msg.content}
+   616→                  </div>
+   617→                  {msg.role === "user" && (
+   618→                    <div className="shrink-0 w-7 h-7 rounded-full bg-primary flex items-center justify-center mt-0.5">
+   619→                      <MessageSquare className="w-3.5 h-3.5 text-primary-foreground" />
+   620→                    </div>
+   621→                  )}
+   622→                </motion.div>
+   623→              ))}
+   624→              {isLoading && (
+   625→                <motion.div
+   626→                  key="loading"
+   627→                  initial={{ opacity: 0, y: 8 }}
+   628→                  animate={{ opacity: 1, y: 0 }}
+   629→                  className="flex gap-2.5 justify-start"
+   630→                >
+   631→                  <div className="shrink-0 w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center mt-0.5">
+   632→                    <Bot className="w-4 h-4 text-primary" />
+   633→                  </div>
+   634→                  <div className="bg-muted rounded-2xl rounded-bl-md px-4 py-3">
+   635→                    <div className="flex gap-1.5">
+   636→                      <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce [animation-delay:0ms]" />
+   637→                      <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce [animation-delay:150ms]" />
+   638→                      <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce [animation-delay:300ms]" />
+   639→                    </div>
+   640→                  </div>
+   641→                </motion.div>
+   642→              )}
+   643→              <div ref={chatEndRef} />
+   644→            </div>
+   645→
+   646→            {error && (
+   647→              <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-2.5">
+   648→                {error}
+   649→              </div>
+   650→            )}
+   651→
+   652→            <div className="flex flex-col gap-2">
+   653→              <Label htmlFor="guest-message" className="sr-only">Сообщение гостя</Label>
+   654→              <Textarea
+   655→                id="guest-message"
+   656→                placeholder="Напишите сообщение... (Enter для отправки)"
+   657→                value={message}
+   658→                onChange={(e) => setMessage(e.target.value)}
+   659→                onKeyDown={handleKeyDown}
+   660→                disabled={isLoading}
+   661→                className="min-h-[80px] resize-y"
+   662→              />
+   663→              <Button
+   664→                onClick={handleSend}
+   665→                disabled={!message.trim() || isLoading}
+   666→                className="w-full sm:w-auto sm:self-end"
+   667→              >
+   668→                {isLoading ? (
+   669→                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Думаю...</>
+   670→                ) : (
+   671→                  <><Send className="w-4 h-4 mr-2" /> Получить ответ ИИ</>
+   672→                )}
+   673→              </Button>
+   674→            </div>
+   675→          </CardContent>
+   676→        </Card>
+   677→      </main>
+   678→
+   679→      <footer className="border-t bg-white/80 backdrop-blur-sm mt-auto">
+   680→        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 text-center text-xs text-muted-foreground">
+   681→          Прототип интеграции ИИ с данными бронирования &middot; Powered by Kimi Platform
+   682→        </div>
+   683→      </footer>
+   684→    </div>
+   685→  );
+   686→}
+   687→

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -40,9 +40,15 @@ import {
   AlertTriangle,
   ShieldCheck,
   Trash2,
+  RotateCcw,
 } from "lucide-react";
 
-const KIMI_MODEL = "moonshot-v1-8k";
+const KIMI_MODELS = ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"] as const;
+const KIMI_MODEL_LABELS: Record<string, string> = {
+  "moonshot-v1-8k": "moonshot-v1-8k (быстрая)",
+  "moonshot-v1-32k": "moonshot-v1-32k",
+  "moonshot-v1-128k": "moonshot-v1-128k (медленная)",
+};
 const LS_KEY = "ai-concierge-settings";
 const LS_MESSAGES_KEY = "ai-concierge-messages";
 const LS_PASSPORT_KEY = "ai-concierge-passport";
@@ -50,20 +56,22 @@ const LS_PASSPORT_KEY = "ai-concierge-passport";
 interface Settings {
   apiKey: string;
   stubMode: boolean;
+  model: string;
 }
 
 function loadSettings(): Settings {
-  if (typeof window === "undefined") return { apiKey: "", stubMode: false };
+  const defaults: Settings = { apiKey: "", stubMode: false, model: KIMI_MODELS[0] };
+  if (typeof window === "undefined") return defaults;
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      return { ...{ apiKey: "", stubMode: false }, ...parsed };
+      return { ...defaults, ...parsed };
     }
   } catch {
     /* ignore */
   }
-  return { apiKey: "", stubMode: false };
+  return defaults;
 }
 
 function saveSettings(s: Settings) {
@@ -120,27 +128,27 @@ function getStubResponse(passportReceived: boolean, userMessage: string): string
   if (msg.includes("паспорт") || msg.includes("загруз") || msg.includes("документ")) {
     return passportReceived
       ? "Ваш паспорт уже получен и проверен ✓. Можете переходить к следующему этапу — оплате залога."
-      : "Для начала процесса заселения необходимо загрузить копию паспорта. Это первый обязательный шаг. Пожалуйста, перейдите на страницу загрузки паспорта: [загрузить паспорт](/passport).";
+      : "Для начала процесса заселения необходимо **загрузить копию паспорта**. Это первый обязательный шаг. Пожалуйста, перейдите на страницу загрузки: [загрузить паспорт](/passport).";
   }
-  if (msg.includes("засел") || msg.includes("заселиться") || msg.includes("как") && msg.includes("мне")) {
+  if (msg.includes("засел") || msg.includes("заселиться") || (msg.includes("как") && msg.includes("мне"))) {
     return passportReceived
-      ? "Ваш паспорт уже на руках! Следующий шаг — оплата залога. После подтверждения оплаты мы подготовим ваш номер к заезду."
-      : "Процесс заселения состоит из нескольких этапов:\n\n1. **Загрузка паспорта** — сейчас этот шаг не завершён\n2. **Оплата залога** — после получения паспорта\n3. **Получение ключа** — после оплаты\n\nПожалуйста, начните с загрузки паспорта — это обязательный первый шаг: [загрузить паспорт](/passport).";
+      ? "Ваш паспорт уже на руках! Следующий шаг — **оплата залога**. После подтверждения оплаты мы подготовим ваш номер к заезду."
+      : "Процесс заселения состоит из нескольких этапов:\n\n1. **Загрузка паспорта** — *сейчас этот шаг не завершён*\n2. **Оплата залога** — после получения паспорта\n3. **Получение ключа** — после оплаты\n\nПожалуйста, начните с загрузки паспорта — это обязательный первый шаг: [загрузить паспорт](/passport).";
   }
   if (msg.includes("оплат") || msg.includes("залог") || msg.includes("деньг") || msg.includes("карт")) {
     return passportReceived
-      ? "Оплатить залог можно картой при заселении или заранее онлайн. Сумма залога зависит от категории номера и будет списана при заселении."
-      : "Оплата залога — это второй этап после загрузки паспорта. Сначала необходимо загрузить паспорт, затем мы направим вам ссылку на оплату.";
+      ? "Оплатить залог можно картой при заселении или заранее онлайн. **Сумма залога** зависит от категории номера и будет списана при заселении."
+      : "Оплата залога — это второй этап после загрузки паспорта. Сначала необходимо загрузить паспорт, затем мы направим вам ссылку на оплату. [Загрузить паспорт](/passport).";
   }
   if (msg.includes("ключ") || msg.includes("номер") || msg.includes("комнат")) {
     return passportReceived
       ? "После оплаты залога вы получите ключ от номера на ресепшен. Номер будет готов к вашему заезду."
-      : "Получение ключа — финальный этап. Перед этим нужно загрузить паспорт и оплатить залог.";
+      : "Получение ключа — финальный этап. Перед этим нужно загрузить паспорт и оплатить залог. Начните с первого шага: [загрузить паспорт](/passport).";
   }
   if (msg.includes("привет") || msg.includes("здравствуй") || msg.includes("добр")) {
     return passportReceived
       ? "Здравствуйте! Рады вас видеть. Ваш паспорт уже получен. Чем могу помочь?"
-      : "Здравствуйте! Добро пожаловать. Я — ваш виртуальный консьерж. Для начала процесса заселения необходимо загрузить паспорт. Могу я помочь вам с этим?";
+      : "Здравствуйте! Добро пожаловать. Я — ваш виртуальный консьерж. 🏨\n\nДля начала процесса заселения необходимо **загрузить паспорт** — это обязательный первый шаг.\n\n[Перейти к загрузке паспорта →](/passport)";
   }
   if (msg.includes("спасибо") || msg.includes("благодар")) {
     return "Пожалуйста! Обращайтесь, если возникнут вопросы по бронированию или заселению. Я всегда на связи.";
@@ -148,73 +156,125 @@ function getStubResponse(passportReceived: boolean, userMessage: string): string
   // default
   return passportReceived
     ? "Спасибо за вопрос. Ваш паспорт уже получен. Если у вас есть вопросы по оплате залога или подготовке номера — задавайте, с радостью помогу!"
-    : "Спасибо за вопрос. Напоминаю, что первым шагом для заселения является загрузка паспорта. Если у вас есть вопросы по этому процессу — спрашивайте!";
+    : "Спасибо за вопрос. Напоминаю, что *первым шагом* для заселения является **загрузка паспорта**.\n\n[Загрузить паспорт](/passport)";
+}
+
+function renderInlineMarkdown(text: string): ReactNode {
+  // Split text into tokens: bold, italic, markdown links, plain URLs, and plain text
+  // Order matters: **bold** before *italic*, md-links before plain URLs
+  const pattern = /\*\*(.+?)\*\*|\*([^*]+?)\*|\[([^\]]+)\]\(([^)]+)\)|(https?:\/\/[^\s)<>]+)/g;
+
+  const tokens: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let keyIdx = 0;
+
+  while ((match = pattern.exec(text)) !== null) {
+    // Push preceding plain text with line break handling
+    if (match.index > lastIndex) {
+      tokens.push(renderTextWithBreaks(text.slice(lastIndex, match.index), keyIdx++));
+    }
+
+    if (match[1] !== undefined) {
+      // **bold**
+      tokens.push(
+        <strong key={`b-${keyIdx++}`} className="font-semibold">
+          {renderInlineMarkdown(match[1])}
+        </strong>
+      );
+    } else if (match[2] !== undefined) {
+      // *italic*
+      tokens.push(
+        <em key={`i-${keyIdx++}`} className="italic">
+          {renderInlineMarkdown(match[2])}
+        </em>
+      );
+    } else if (match[3] !== undefined) {
+      // [text](url) — markdown link
+      const href = match[4];
+      const label = match[3];
+      const isInternal = href.startsWith('/');
+      if (isInternal) {
+        tokens.push(
+          <Link
+            key={`l-${keyIdx++}`}
+            href={href}
+            className="underline underline-offset-2 text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-0.5"
+          >
+            {renderInlineMarkdown(label)}
+          </Link>
+        );
+      } else {
+        tokens.push(
+          <a
+            key={`l-${keyIdx++}`}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-0.5"
+          >
+            {renderInlineMarkdown(label)}
+          </a>
+        );
+      }
+    } else if (match[5] !== undefined) {
+      // plain URL
+      const url = match[5];
+      const label = url.length > 50 ? url.slice(0, 47) + "..." : url;
+      tokens.push(
+        <a
+          key={`u-${keyIdx++}`}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 text-primary hover:text-primary/80 transition-colors"
+        >
+          {label}
+        </a>
+      );
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Push remaining plain text
+  if (lastIndex < text.length) {
+    tokens.push(renderTextWithBreaks(text.slice(lastIndex), keyIdx++));
+  }
+
+  return tokens.length === 1 ? tokens[0] : <>{tokens}</>;
+}
+
+function renderTextWithBreaks(text: string, baseKey: number): ReactNode {
+  return text.split("\n").map((line, j, arr) => {
+    // Detect list items: "1. ", "- ", "* "
+    const listMatch = line.match(/^(\d+)\.\s(.*)$/);
+    const dashMatch = !listMatch && line.match(/^[-*]\s(.*)$/);
+
+    return (
+      <span key={`${baseKey}-${j}`}>
+        {j > 0 && <br />}
+        {listMatch && (
+          <span className="font-medium mr-1">{listMatch[1]}.</span>
+        )}
+        {dashMatch && (
+          <span className="mr-1">•</span>
+        )}
+        {listMatch ? listMatch[2] : dashMatch ? dashMatch[1] : line}
+      </span>
+    );
+  });
 }
 
 function renderMessageContent(text: string) {
-  // 1) Markdown-style links: [text](url)
-  // 2) Plain URLs: https://...
-  // Everything else stays as plain text
-  const parts: (string | { type: "link"; href: string; label: string })[] = [];
-  // Match markdown links first, then plain URLs; everything else is text
-  const pattern = /\[([^\]]+)\]\(([^)]+)\)|(https?:\/\/[^\s)<>]+)/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = pattern.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
-    }
-    if (match[1] !== undefined) {
-      // Markdown link [label](href)
-      parts.push({ type: "link", href: match[2], label: match[1] });
-    } else {
-      // Plain URL
-      const url = match[0];
-      // Use the URL as label but truncate if very long
-      const label = url.length > 50 ? url.slice(0, 47) + "..." : url;
-      parts.push({ type: "link", href: url, label });
-    }
-    lastIndex = match.index + match[0].length;
-  }
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
-  }
-
-  return parts.map((part, i) => {
-    if (typeof part === "string") {
-      // Preserve line breaks inside plain text segments
-      return part.split("\n").map((line, j, arr) => (
-        <span key={`${i}-${j}`}>
-          {line}
-          {j < arr.length - 1 && <br />}
-        </span>
-      ));
-    }
-    const isInternal = part.href.startsWith('/');
-    if (isInternal) {
-      return (
-        <Link
-          key={`l-${i}`}
-          href={part.href}
-          className="underline underline-offset-2 text-primary hover:text-primary/80 transition-colors"
-        >
-          {part.label}
-        </Link>
-      );
-    }
-    return (
-      <a
-        key={`l-${i}`}
-        href={part.href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="underline underline-offset-2 text-primary hover:text-primary/80 transition-colors"
-      >
-        {part.label}
-      </a>
-    );
-  });
+  // Split by double newlines for paragraph-like spacing
+  const paragraphs = text.split(/\n\n+/);
+  return <>{paragraphs.map((para, pi) => (
+    <span key={`p-${pi}`}> 
+      {pi > 0 && <><br /><br /></>}
+      {renderInlineMarkdown(para)}
+    </span>
+  ))}</>;
 }
 
 function buildSystemPrompt(passportReceived: boolean) {
@@ -224,14 +284,30 @@ function buildSystemPrompt(passportReceived: boolean) {
 - Паспорт: ${passportReceived ? "получен ✓" : "не получен ✗"}
 
 Правила заселения:
-1. Сначала гость должен предоставить паспорт. Если паспорт ещё не получен — напомни гостю, что это первый необходимый шаг, и дай ссылку для загрузки: /passport
-2. После получения паспорта следующий этап — оплата залога.
+1. Сначала гость должен предоставить паспорт. Если паспорт ещё не получен — обязательно напомни гостю, что это первый необходимый шаг, и дай **кликабельную ссылку** в формате markdown: [загрузить паспорт](/passport). Эту ссылку нужно давать ВСЕГДА, когда обсуждается загрузка паспорта или когда гость спрашивает что делать дальше, а паспорт ещё не получен.
+2. Если паспорт УЖЕ получен — НИКОГДА не давай ссылку /passport и не упоминай загрузку паспорта как необходимость. Вместо этого говори о следующем этапе — оплате залога.
+3. После получения паспорта следующий этап — оплата залога. Пиши просто, что необходимо оплатить залог, не придумывай как именно это сделать и не придумывай условия.
+
+Форматирование сообщений:
+- Используй **жирный текст** (двойные звёздочки) для выделения важных слов и этапов.
+- Используй *курсив* (одинарные звёздочки) для пояснений.
+- Используй нумерованные списки (1. 2. 3.) для перечисления этапов.
+- Ссылки на внутренние страницы давай ТОЛЬКО в формате markdown: [текст ссылки](/путь).
+- Никогда не пиши голые URL без форматирования.
 
 Отвечай вежливо, кратко и по делу. Отвечай только на русском языке. Не придумывай информацию, которой нет в контексте. Если гость спрашивает о чём-то несвязанном с бронированием — мягко скажи, что ты можешь помочь только по вопросам бронирования и заселения.`;
 }
 
-async function callKimi(
+class RateLimitError extends Error {
+  constructor() {
+    super("RATE_LIMIT");
+    this.name = "RateLimitError";
+  }
+}
+
+async function callKimiSingle(
   apiKey: string,
+  model: string,
   systemPrompt: string,
   userMessage: string
 ): Promise<string> {
@@ -246,7 +322,7 @@ async function callKimi(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: KIMI_MODEL,
+        model,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userMessage },
@@ -261,6 +337,7 @@ async function callKimi(
   }
 
   if (!res.ok) {
+    if (res.status === 429) throw new RateLimitError();
     let detail = `HTTP ${res.status}`;
     try {
       const body = await res.json();
@@ -281,10 +358,40 @@ async function callKimi(
   return content;
 }
 
+async function callKimiWithFallback(
+  apiKey: string,
+  preferredModel: string,
+  systemPrompt: string,
+  userMessage: string
+): Promise<string> {
+  // Build ordered list: preferred first, then the rest
+  const otherModels = KIMI_MODELS.filter((m) => m !== preferredModel);
+  const modelsToTry = [preferredModel, ...otherModels];
+  const errors: string[] = [];
+
+  for (const model of modelsToTry) {
+    try {
+      return await callKimiSingle(apiKey, model, systemPrompt, userMessage);
+    } catch (err) {
+      if (err instanceof RateLimitError) {
+        errors.push(model);
+        continue; // try next model
+      }
+      throw err; // non-429 errors should propagate immediately
+    }
+  }
+
+  // All models returned 429
+  throw new Error(
+    `Все модели перегружены (пробовались: ${errors.join(", ")}). Попробуйте позже.`
+  );
+}
+
 export default function HomePage() {
   const [settings, setSettings] = useState<Settings>({
     apiKey: "",
     stubMode: true,
+    model: KIMI_MODELS[0],
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showKey, setShowKey] = useState(false);
@@ -294,6 +401,7 @@ export default function HomePage() {
   const messagesLoadedRef = useRef(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retryMessage, setRetryMessage] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -346,9 +454,8 @@ export default function HomePage() {
     });
   }, []);
 
-  const handleSend = useCallback(async () => {
-    const trimmed = message.trim();
-    if (!trimmed || isLoading) return;
+  const doSend = useCallback(async (text: string) => {
+    if (!text.trim() || isLoading) return;
 
     if (!settings.apiKey.trim() && !settings.stubMode) {
       setSettingsOpen(true);
@@ -356,7 +463,8 @@ export default function HomePage() {
     }
 
     setError(null);
-    const updated = [...messages, { role: "user" as const, content: trimmed }];
+    setRetryMessage(null);
+    const updated = [...messages, { role: "user" as const, content: text.trim() }];
     setMessages(updated);
     saveMessages(updated);
     setMessage("");
@@ -367,13 +475,14 @@ export default function HomePage() {
       if (settings.stubMode) {
         // Simulate network delay for realism
         await new Promise((r) => setTimeout(r, 800 + Math.random() * 700));
-        response = getStubResponse(passportReceived, trimmed);
+        response = getStubResponse(passportReceived, text.trim());
       } else {
         const systemPrompt = buildSystemPrompt(passportReceived);
-        response = await callKimi(
+        response = await callKimiWithFallback(
           settings.apiKey,
+          settings.model,
           systemPrompt,
-          trimmed
+          text.trim()
         );
       }
       const withReply = [...updated, { role: "assistant" as const, content: response }];
@@ -383,14 +492,27 @@ export default function HomePage() {
       const msg =
         err instanceof Error ? err.message : "Произошла неизвестная ошибка";
       setError(msg);
-      // Revert: remove the user message we just added
-      const reverted = updated.slice(0, -1);
-      setMessages(reverted);
-      saveMessages(reverted);
+      // Keep user message, save retry text
+      setRetryMessage(text.trim());
     } finally {
       setIsLoading(false);
     }
-  }, [message, messages, passportReceived, isLoading, settings]);
+  }, [messages, passportReceived, isLoading, settings]);
+
+  const handleSend = useCallback(async () => {
+    await doSend(message);
+  }, [message, doSend]);
+
+  const handleRetry = useCallback(async () => {
+    if (!retryMessage) return;
+    // Remove the last user message that failed, then re-send
+    const reverted = messages.slice(0, -1);
+    setMessages(reverted);
+    saveMessages(reverted);
+    setError(null);
+    setRetryMessage(null);
+    await doSend(retryMessage);
+  }, [retryMessage, messages, doSend]);
 
   const handlePassportToggle = useCallback((v: boolean) => {
     setPassportReceived(v);
@@ -468,6 +590,22 @@ export default function HomePage() {
                     <a href="https://platform.moonshot.ai" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">
                       platform.moonshot.ai
                     </a>
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="model-select">Модель Kimi</Label>
+                  <select
+                    id="model-select"
+                    value={settings.model}
+                    onChange={(e) => setSettings((s) => ({ ...s, model: e.target.value }))}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    {KIMI_MODELS.map((m) => (
+                      <option key={m} value={m}>{KIMI_MODEL_LABELS[m]}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    При 429 (перегрузка) остальные модели пробуются автоматически
                   </p>
                 </div>
 
@@ -644,8 +782,20 @@ export default function HomePage() {
             </div>
 
             {error && (
-              <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-2.5">
-                {error}
+              <div className="flex items-center gap-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-2.5">
+                <span className="flex-1">{error}</span>
+                {retryMessage && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 h-7 px-2 text-xs"
+                    onClick={handleRetry}
+                    disabled={isLoading}
+                  >
+                    <RotateCcw className={`w-3 h-3 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
+                    Повторить
+                  </Button>
+                )}
               </div>
             )}
 
