@@ -87,3 +87,49 @@ Work Log:
 Stage Summary:
 - All UI flows verified: settings, main page, passport page, back navigation
 - Static export works in dev server mode
+
+---
+Task ID: 6
+Agent: Main
+Task: Switch API to .ai and add stub mode for testing
+
+Work Log:
+- Changed next.config.ts rewrite destination from api.moonshot.cn to api.moonshot.ai
+- Updated error messages and settings links from platform.moonshot.cn to platform.moonshot.ai
+- Added `stubMode` boolean to Settings interface, persisted in localStorage
+- Created `getStubResponse()` function with context-aware mock responses based on passport status
+- Stub responses cover: passport questions, check-in process, payment, room keys, greetings, thanks, and default
+- Added stub toggle switch in Settings dialog
+- Added blue info banner when stub mode is active
+- Added STUB badge on chat card header when stub mode is on
+- When stub mode is on, sending a message works without API key (no settings dialog forced open)
+- Simulated 800-1500ms delay for realistic feel
+- Browser-tested: 3 messages sent successfully with correct context-aware responses
+- Passport toggle correctly changes AI behavior (without passport → reminds to upload; with passport → proceeds to next step)
+- Dev logs clean, no errors, lint passes
+
+Stage Summary:
+- API endpoint changed to api.moonshot.ai
+- Stub mode allows full chat testing without real API key
+- All 3 test scenarios passed: check-in question (no passport), greeting (no passport), payment question (passport received)
+
+---
+Task ID: 7
+Agent: Main
+Task: Refactor passport page to demo mode with disabled fields and checkbox
+
+Work Log:
+- Replaced editable form fields with disabled inputs containing fictional data (Иванов Иван, 4510 123456, 1990-05-15)
+- Added amber warning banner explaining demo mode and that real data should not be entered
+- Replaced submit-based validation with a single Checkbox "Я подтверждаю, что данные паспорта предоставлены"
+- Submit button enabled only when checkbox is checked
+- Changed success text from "Паспорт отправлен" to "Паспорт подтверждён"
+- Updated CardDescription to "Предпросмотр полей формы (заблокировано в демо-режиме)"
+- Changed Upload icon to FileCheck for the card title and submit button
+- All fields have tabIndex={-1} and bg-muted styling to visually communicate disabled state
+- Browser verified: fields disabled with demo data, checkbox toggles button state, submit leads to success page, back link returns to /
+
+Stage Summary:
+- Passport page now in demo-only mode with locked fields and checkbox confirmation
+- No real data can be entered
+- Full flow verified via browser: checkbox → submit → success → back to chat

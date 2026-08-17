@@ -14,37 +14,32 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Hotel,
   ArrowLeft,
-  Upload,
   CheckCircle2,
   User,
   CreditCard,
   CalendarDays,
+  ShieldAlert,
+  FileCheck,
 } from "lucide-react";
 
+const DEMO_DATA = {
+  lastName: "Иванов",
+  firstName: "Иван",
+  passportNumber: "4510 123456",
+  birthDate: "1990-05-15",
+};
+
 export default function PassportPage() {
+  const [confirmed, setConfirmed] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [form, setForm] = useState({
-    lastName: "",
-    firstName: "",
-    passportNumber: "",
-    birthDate: "",
-  });
-
-  const update = (field: string, value: string) =>
-    setForm((f) => ({ ...f, [field]: value }));
-
-  const canSubmit =
-    form.lastName.trim() &&
-    form.firstName.trim() &&
-    form.passportNumber.trim() &&
-    form.birthDate.trim();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (!confirmed) return;
     setSubmitted(true);
   };
 
@@ -74,10 +69,10 @@ export default function PassportPage() {
                 <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
                   <CheckCircle2 className="w-8 h-8 text-emerald-600" />
                 </div>
-                <h2 className="text-xl font-semibold">Паспорт отправлен</h2>
+                <h2 className="text-xl font-semibold">Паспорт подтверждён</h2>
                 <p className="text-sm text-muted-foreground max-w-sm">
-                  Данные паспорта успешно отправлены. Мы обработаем их в ближайшее
-                  время. Вернитесь в чат, чтобы узнать следующие шаги.
+                  Данные паспорта отмечены как предоставленные. Вернитесь в чат,
+                  чтобы узнать следующие шаги заселения.
                 </p>
                 <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                   <Button asChild>
@@ -132,14 +127,26 @@ export default function PassportPage() {
             </Button>
           </div>
 
+          <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">Демонстрационный режим</p>
+              <p className="mt-1">
+                Это прототип. Поля ниже заблокированы и содержат фиктивные
+                данные. Настоящие персональные данные вводить не нужно —
+                достаточно подтвердить готовность галочкой ниже.
+              </p>
+            </div>
+          </div>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <Upload className="w-4 h-4" />
+                <FileCheck className="w-4 h-4" />
                 Данные паспорта
               </CardTitle>
               <CardDescription>
-                Заполните данные для завершения первого этапа заселения
+                Предпросмотр полей формы (заблокировано в демо-режиме)
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -148,27 +155,27 @@ export default function PassportPage() {
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="last-name" className="flex items-center gap-1.5">
                       <User className="w-3.5 h-3.5 text-muted-foreground" />
-                      Фамилия *
+                      Фамилия
                     </Label>
                     <Input
                       id="last-name"
-                      placeholder="Иванов"
-                      value={form.lastName}
-                      onChange={(e) => update("lastName", e.target.value)}
-                      autoComplete="family-name"
+                      value={DEMO_DATA.lastName}
+                      disabled
+                      className="bg-muted"
+                      tabIndex={-1}
                     />
                   </div>
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="first-name" className="flex items-center gap-1.5">
                       <User className="w-3.5 h-3.5 text-muted-foreground" />
-                      Имя *
+                      Имя
                     </Label>
                     <Input
                       id="first-name"
-                      placeholder="Иван"
-                      value={form.firstName}
-                      onChange={(e) => update("firstName", e.target.value)}
-                      autoComplete="given-name"
+                      value={DEMO_DATA.firstName}
+                      disabled
+                      className="bg-muted"
+                      tabIndex={-1}
                     />
                   </div>
                 </div>
@@ -176,42 +183,65 @@ export default function PassportPage() {
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="passport-num" className="flex items-center gap-1.5">
                     <CreditCard className="w-3.5 h-3.5 text-muted-foreground" />
-                    Серия и номер паспорта *
+                    Серия и номер паспорта
                   </Label>
                   <Input
                     id="passport-num"
-                    placeholder="4510 123456"
-                    value={form.passportNumber}
-                    onChange={(e) => update("passportNumber", e.target.value)}
+                    value={DEMO_DATA.passportNumber}
+                    disabled
+                    className="bg-muted"
+                    tabIndex={-1}
                   />
                 </div>
 
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="birth-date" className="flex items-center gap-1.5">
                     <CalendarDays className="w-3.5 h-3.5 text-muted-foreground" />
-                    Дата рождения *
+                    Дата рождения
                   </Label>
                   <Input
                     id="birth-date"
                     type="date"
-                    value={form.birthDate}
-                    onChange={(e) => update("birthDate", e.target.value)}
+                    value={DEMO_DATA.birthDate}
+                    disabled
+                    className="bg-muted"
+                    tabIndex={-1}
                   />
                 </div>
 
-                <div className="pt-2">
-                  <Badge
-                    variant="outline"
-                    className="text-xs text-muted-foreground font-normal"
-                  >
-                    Демо: данные сохраняются только локально и никак не обрабатываются, вводите фиктивные данные
-                  </Badge>
-                </div>
+                <div className="border-t pt-4 mt-2 flex flex-col gap-3">
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id="confirm-data"
+                      checked={confirmed}
+                      onCheckedChange={(v) => setConfirmed(v === true)}
+                    />
+                    <Label
+                      htmlFor="confirm-data"
+                      className="text-sm font-normal leading-snug cursor-pointer"
+                    >
+                      Я подтверждаю, что данные паспорта предоставлены
+                    </Label>
+                  </div>
 
-                <Button type="submit" disabled={!canSubmit} className="w-full sm:w-auto">
-                  <Upload className="w-4 h-4 mr-2" />
-                  Отправить паспорт
-                </Button>
+                  <div className="pt-1">
+                    <Badge
+                      variant="outline"
+                      className="text-xs text-muted-foreground font-normal"
+                    >
+                      Демо: данные не отправляются и не сохраняются
+                    </Badge>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={!confirmed}
+                    className="w-full sm:w-auto"
+                  >
+                    <FileCheck className="w-4 h-4 mr-2" />
+                    Подтвердить
+                  </Button>
+                </div>
               </form>
             </CardContent>
           </Card>
